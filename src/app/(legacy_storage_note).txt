@@ -1,0 +1,28 @@
+**Important Note on Data Storage for /render/[iframeId]**
+
+The current implementation uses `localStorage` to pass the extracted iframe `srcdoc` data from the main page (`/`) to the dynamic rendering page (`/render/[iframeId]`).
+
+**This is a temporary simplification for demonstration purposes and has limitations:**
+
+1.  **Client-Side Only:** `localStorage` is browser-specific and won't work if the user navigates directly to the `/render/...` URL without first visiting the main page in the same browser session.
+2.  **Size Limits:** `localStorage` has size limitations (typically 5-10MB), which might be insufficient for very large or numerous `srcdoc` contents.
+3.  **Not Ideal for Server Components:** Relying on `localStorage` breaks the paradigm of fetching data server-side where possible.
+
+**Recommended Alternatives for a Production Application:**
+
+1.  **Server-Side Storage:**
+    *   When a file is uploaded, process it on the server (e.g., using a Next.js API route or Server Action).
+    *   Store the extracted `srcdoc` data in a database (like Firestore, PostgreSQL, etc.) associated with a unique ID.
+    *   The `/render/[iframeId]/page.tsx` component (ideally a Server Component) would fetch the data directly from the database using the `iframeId`.
+    *   This is the most robust and scalable approach.
+
+2.  **State Management Library (for Client-Side Complexity):**
+    *   If the app remains primarily client-side, use a state management library (like Zustand, Redux, Jotai) to hold the extracted data in memory.
+    *   The rendering page would access this shared state. This still has limitations if the user refreshes the render page or navigates directly.
+
+3.  **API Route Proxy:**
+    *   Store the data temporarily on the server (e.g., in-memory cache with expiry, or a temporary database entry).
+    *   Create an API route (e.g., `/api/iframe/[iframeId]`) that retrieves and serves the HTML content.
+    *   The `/render/[iframeId]/page.tsx` fetches from this API route.
+
+For this project, `localStorage` was used to quickly enable the "Open in New Tab" feature without setting up a backend database. Please replace this with a proper server-side storage solution in a real-world application. The necessary code modification in `src/app/page.tsx` to *enable* the localStorage approach is commented within the `src/app/render/[iframeId]/page.tsx` file for reference.
