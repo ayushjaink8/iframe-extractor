@@ -5,6 +5,55 @@ import { useParams } from 'next/navigation';
 import { useToast } from '@/hooks/use-toast';
 import { Skeleton } from '@/components/ui/skeleton';
 
+// Function to remove CSP meta tags from HTML string - Improved Regex
+const removeCspMetaTags = (html: string): string => {
+    // Remove <meta http-equiv="Content-Security-Policy" ...> tags
+    // More robust regex handling various attribute orders and quotes
+    const cspHttpEquivRegex = /<meta\s+[^>]*?http-equiv\s*=\s*["']?Content-Security-Policy["']?[^>]*?>/gi;
+    let cleanedHtml = html.replace(cspHttpEquivRegex, '');
+
+    // Also remove potential <meta name="Content-Security-Policy" ...>
+    const cspNameRegex = /<meta\s+[^>]*?name\s*=\s*["']?Content-Security-Policy["']?[^>]*?>/gi;
+    cleanedHtml = cleanedHtml.replace(cspNameRegex, '');
+
+    return cleanedHtml;
+};
+
+// Function to add a <base> tag inside the <head> or create a <head> if needed
+const ensureBaseTag = (html: string): string => {
+    // Use the root path as the base URL. This assumes resources like CSS/JS
+    // are served relative to the domain root (e.g., /auraFW, /jslibrary).
+    const baseTag = '<base href="/">';
+
+    // Avoid adding if base tag already exists
+    if (/<base\s+/i.test(html)) {
+        console.log("Base tag already exists, skipping insertion.");
+        return html;
+    }
+
+    // Try to insert within existing <head>
+    if (/<head\s*[^>]*>/i.test(html)) { // Allow attributes in <head> tag
+        // Insert after <head ...> opening tag
+        console.log("Inserting base tag into existing head.");
+        return html.replace(/(<head\s*[^>]*>)/i, `$1\n${baseTag}`);
+    } else {
+        // No <head>, try to insert before <body> or <html>, or prepend if neither exist
+        if (/<body\s*[^>]*>/i.test(html)) { // Allow attributes in <body>
+             console.log("Creating head and inserting base tag before body.");
+             return html.replace(/(<body\s*[^>]*>)/i, `<head>\n${baseTag}\n</head>\n$1`);
+        } else if (/<html\s*[^>]*>/i.test(html)) { // Allow attributes in <html>
+             console.log("Creating head and inserting base tag after html.");
+             return html.replace(/(<html\s*[^>]*>)/i, `$1\n<head>\n${baseTag}\n</head>`);
+        } else {
+            // If no html or body tag found, just prepend (might be a fragment)
+             // Wrap the fragment in basic HTML structure along with the base tag
+             console.log("Wrapping fragment and inserting base tag.");
+             return `<!DOCTYPE html>\n<html>\n<head>\n${baseTag}\n<meta charset="UTF-8">\n<title>Rendered Content</title>\n</head>\n<body>\n${html}\n</body>\n</html>`;
+        }
+    }
+};
+
+
 export default function RenderIframePage() {
   const params = useParams();
   const iframeId = params.iframeId as string | undefined;
@@ -25,22 +74,24 @@ export default function RenderIframePage() {
 
     try {
       // Attempt to retrieve the stored srcdoc from localStorage
-      // This relies on the main page having stored the data.
-      const storedData = localStorage.getItem('iframeData'); // NOTE: This is a temporary simplification
+      const storedData = localStorage.getItem('iframeData');
       if (storedData) {
         const allIframes: Array<{ id: string; srcdoc: string }> = JSON.parse(storedData);
         const foundIframe = allIframes.find(iframe => iframe.id === iframeId);
 
         if (foundIframe) {
-           // Set the raw srcdoc content directly
-           setHtmlContent(foundIframe.srcdoc);
+           // 1. Clean the srcdoc content to remove CSP tags
+           let processedSrcdoc = removeCspMetaTags(foundIframe.srcdoc);
+           // 2. Ensure the base tag is present and set correctly to resolve relative paths.
+           processedSrcdoc = ensureBaseTag(processedSrcdoc);
+           setHtmlContent(processedSrcdoc);
         } else {
           setError(`Iframe with ID "${iframeId}" not found.`);
            toast({ variant: 'destructive', title: 'Error', description: `Iframe with ID "${iframeId}" not found.` });
         }
       } else {
-        setError("No iframe data found. Please re-upload the file.");
-         toast({ variant: 'destructive', title: 'Error', description: 'No iframe data found. Please re-upload the file.' });
+        setError("No iframe data found. Please re-upload the file on the main page.");
+         toast({ variant: 'destructive', title: 'Error', description: 'No iframe data found. Please re-upload the file on the main page.' });
       }
     } catch (err) {
       console.error("Error loading iframe content:", err);
@@ -87,15 +138,10 @@ export default function RenderIframePage() {
    }
 
 
-  // Render the content inside an iframe using srcDoc
-  // This mimics the preview environment and handles relative URLs within the content better.
+  // Render the processed HTML content directly using dangerouslySetInnerHTML
+  // Use a key based on iframeId to ensure React replaces the div content on ID change
+  // Add suppressHydrationWarning to handle potential minor mismatches caused by scripts etc.
   return (
-    <iframe
-      srcDoc={htmlContent}
-      style={{ width: '100%', height: '100vh', border: 'none' }} // Basic styling to fill viewport
-      title={`Rendered Content - ${iframeId}`}
-      // Sandbox attribute removed completely as requested to minimize restrictions
-      aria-label={`Rendered content for iframe ${iframeId}`}
-    />
+    <div key={iframeId} dangerouslySetInnerHTML={{ __html: htmlContent }} suppressHydrationWarning={true} />
   );
 }
