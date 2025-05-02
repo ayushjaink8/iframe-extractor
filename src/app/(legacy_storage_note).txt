@@ -1,28 +1,28 @@
+
 **Important Note on Data Storage for /render/[iframeId]**
 
-The current implementation uses `localStorage` to pass the extracted iframe `srcdoc` data from the main page (`/`) to the dynamic rendering page (`/render/[iframeId]`).
+The current implementation uses a Zustand store configured with `persist` middleware to manage the extracted iframe `srcdoc` data. This data is stored in `localStorage` under the key 'iframe-storage', allowing it to persist across browser tabs and sessions. The dynamic rendering page (`/render/[iframeId]`) accesses this store to retrieve the necessary `srcdoc` for display.
 
-**This is a temporary simplification for demonstration purposes and has limitations:**
+**Using Zustand with `localStorage` Persistence:**
 
-1.  **Client-Side Only:** `localStorage` is browser-specific and won't work if the user navigates directly to the `/render/...` URL without first visiting the main page in the same browser session.
-2.  **Size Limits:** `localStorage` has size limitations (typically 5-10MB), which might be insufficient for very large or numerous `srcdoc` contents.
-3.  **Not Ideal for Server Components:** Relying on `localStorage` breaks the paradigm of fetching data server-side where possible.
+1.  **State Management:** Zustand provides a clean way to manage application state.
+2.  **Persistence:** The `persist` middleware automatically handles saving specified parts of the store (in this case, `id` and `srcdoc`) to `localStorage` and rehydrating the store when the application loads.
+3.  **Cross-Tab Access:** `localStorage` allows data to be accessed by the `/render/[iframeId]` page even when opened in a new tab, provided it's the same browser and the data hasn't been cleared.
+4.  **Size Limits:** `localStorage` still has size limitations (typically 5-10MB), which might be insufficient for very large or numerous `srcdoc` contents. Only essential data (`id`, `srcdoc`) is persisted to mitigate this.
+5.  **Client-Side Dependency:** This approach still relies on client-side storage and hydration. Direct navigation to `/render/...` without the store being populated (e.g., after clearing browser data or in a different browser) will result in an error.
 
-**Recommended Alternatives for a Production Application:**
+**Recommended Alternatives for a Production Application (Still Apply):**
 
-1.  **Server-Side Storage:**
-    *   When a file is uploaded, process it on the server (e.g., using a Next.js API route or Server Action).
-    *   Store the extracted `srcdoc` data in a database (like Firestore, PostgreSQL, etc.) associated with a unique ID.
-    *   The `/render/[iframeId]/page.tsx` component (ideally a Server Component) would fetch the data directly from the database using the `iframeId`.
-    *   This is the most robust and scalable approach.
+While Zustand + localStorage is an improvement over direct localStorage manipulation, the following remain more robust solutions for production:
 
-2.  **State Management Library (for Client-Side Complexity):**
-    *   If the app remains primarily client-side, use a state management library (like Zustand, Redux, Jotai) to hold the extracted data in memory.
-    *   The rendering page would access this shared state. This still has limitations if the user refreshes the render page or navigates directly.
+1.  **Server-Side Storage (Most Robust):**
+    *   Store extracted `srcdoc` in a database (Firestore, PostgreSQL, etc.) associated with a unique ID upon file upload.
+    *   The `/render/[iframeId]/page.tsx` (ideally a Server Component) fetches data directly from the database using `iframeId`.
+    *   Most scalable and reliable approach, independent of client-side storage.
 
-3.  **API Route Proxy:**
-    *   Store the data temporarily on the server (e.g., in-memory cache with expiry, or a temporary database entry).
-    *   Create an API route (e.g., `/api/iframe/[iframeId]`) that retrieves and serves the HTML content.
-    *   The `/render/[iframeId]/page.tsx` fetches from this API route.
+2.  **API Route Proxy (Alternative Server-Side):**
+    *   Store data temporarily on the server (cache or temp DB).
+    *   Create an API route (`/api/iframe/[iframeId]`) to serve the `srcdoc`.
+    *   `/render/[iframeId]/page.tsx` fetches from this API route.
 
-For this project, `localStorage` was used to quickly enable the "Open in New Tab" feature without setting up a backend database. Please replace this with a proper server-side storage solution in a real-world application. The necessary code modification in `src/app/page.tsx` to *enable* the localStorage approach is commented within the `src/app/render/[iframeId]/page.tsx` file for reference.
+Zustand with localStorage persistence was implemented to improve state management while still quickly enabling the "Open in New Tab" feature without requiring a full backend database setup for this specific tool's context. A server-side storage solution is highly recommended for real-world applications requiring greater robustness and scalability.

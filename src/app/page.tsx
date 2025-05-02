@@ -32,21 +32,20 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from '@/hooks/use-toast';
+import { useIframeDataStore } from '@/store/iframeStore'; // Import the zustand store
 import { UploadCloud, Copy, ExternalLink, Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import type { IframeData } from '@/types/iframeData';
 
-interface IframeData {
-  id: string; // Unique ID for React key and routing (e.g., "iframe-1", "iframe-2")
-  srcdoc: string;
-  path: string; // Hierarchical path (e.g., "0", "0.1", "1") used for sorting
-  displayName: string; // User-friendly name (e.g., "Iframe #1", "Iframe #2 (nested)")
-}
 
 export default function Home() {
-  const [srcdocList, setSrcdocList] = useState<IframeData[]>([]);
-  const [selectedIframeIndex, setSelectedIframeIndex] = useState<string>(''); // Stores the *array index* of the selected iframe
+  // Local component state for UI, like dragging state and selected index
+  const [selectedIframeIndex, setSelectedIframeIndex] = useState<string>('');
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const { toast } = useToast();
+
+  // Zustand store state and actions
+  const { iframeData: srcdocList, setIframeData } = useIframeDataStore();
 
 
    // Memoized calculation for the currently selected iframe's data object
@@ -82,7 +81,7 @@ export default function Home() {
    }, [selectedIframeData, formatSrcdocForDisplay]); // Added formatSrcdocForDisplay dependency
 
 
-  // Effect to handle iframe srcdoc sanitization and auto-selection
+  // Effect to handle auto-selection based on srcdocList changes from Zustand
   useEffect(() => {
     // Auto-select the first iframe if the list is populated and nothing is selected
     if (srcdocList.length > 0 && selectedIframeIndex === '') {
@@ -97,27 +96,9 @@ export default function Home() {
     if (selectedIframeIndex !== '' && parseInt(selectedIframeIndex, 10) >= srcdocList.length) {
         setSelectedIframeIndex(srcdocList.length > 0 ? '0' : ''); // Select first or clear
     }
+     // NOTE: Removed localStorage logic. Zustand's persist middleware handles storage.
 
-
-    // Save to localStorage whenever srcdocList changes
-    // This is a temporary solution for passing data to the render page. See notes in render/[iframeId]/page.tsx
-    if (srcdocList.length > 0) {
-        try {
-          // Store only the data needed by the render page (id and srcdoc)
-          localStorage.setItem('iframeData', JSON.stringify(srcdocList.map(item => ({ id: item.id, srcdoc: item.srcdoc }))));
-        } catch (e) {
-          console.error("Failed to save iframe data to localStorage", e);
-          toast({
-            variant: "destructive",
-            title: "Storage Error",
-            description: "Could not save iframe data for cross-page rendering. 'Open in New Tab' might not work.",
-          });
-        }
-      } else {
-        localStorage.removeItem('iframeData');
-      }
-
-  }, [srcdocList, selectedIframeIndex, toast]); // Added toast to dependencies
+  }, [srcdocList, selectedIframeIndex, toast]); // Removed toast dependency as it's not used here
 
 
   const extractIframes = useCallback((html: string): IframeData[] => {
@@ -222,7 +203,7 @@ export default function Home() {
           title: 'Invalid File Type',
           description: 'Please upload an HTML file.',
         });
-        setSrcdocList([]); // Clear list on invalid file type
+        setIframeData([]); // Clear store on invalid file type
         return;
       }
 
@@ -237,18 +218,16 @@ export default function Home() {
 
           if (extracted.length === 0) {
             toast({
-              // Keep variant default or use 'info' if you add it
               title: 'No Iframes Found',
               description: 'No iframes with a `srcdoc` attribute were found in the uploaded file.',
             });
-            setSrcdocList([]); // Ensure list is cleared
+             setIframeData([]); // Ensure store is cleared
           } else {
-            setSrcdocList(extracted);
+             setIframeData(extracted); // Set data in Zustand store
              toast({
                title: 'Extraction Successful',
                description: `${extracted.length} iframe(s) with srcdoc found.`,
              });
-             // setSelectedIframeIndex('0'); // Let useEffect handle selection
           }
         } catch (error) {
             console.error("Error processing file:", error);
@@ -257,7 +236,7 @@ export default function Home() {
               title: 'Processing Error',
               description: `An error occurred while processing the file: ${error instanceof Error ? error.message : 'Unknown error'}`,
             });
-            setSrcdocList([]); // Clear list on error
+            setIframeData([]); // Clear store on error
         }
       };
       reader.onerror = () => {
@@ -266,11 +245,11 @@ export default function Home() {
             title: 'File Read Error',
             description: 'Could not read the selected file.',
           });
-        setSrcdocList([]); // Clear list on error
+        setIframeData([]); // Clear store on error
       }
       reader.readAsText(file);
     },
-    [extractIframes, toast]
+    [extractIframes, setIframeData, toast] // Added setIframeData to dependencies
   );
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -524,6 +503,3 @@ export default function Home() {
   );
 }
 
-    
-
-    
