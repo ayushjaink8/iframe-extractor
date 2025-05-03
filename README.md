@@ -4,12 +4,7 @@
 
 A simple tool to extract and preview `<iframe>` contents (including `srcdoc`) from downloaded HTML files.
 
----
-
-## 🚀 Live Demo
-
-You can try IframeXtractor right now at:  
-https://iframe-extractor.vercel.app/
+You can try IframeXtractor right now at: https://iframe-extractor.vercel.app/
 
 ---
 
